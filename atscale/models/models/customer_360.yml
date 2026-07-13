@@ -1,0 +1,251 @@
+# Customer 360 Semantic Model - AtScale SML
+# This model federates across Aurora PostgreSQL (customer data) and
+# Amazon Redshift (product/purchase data) with a shared customer dimension key (cid).
+
+unique_name: customer_360
+object_type: model
+label: Customer 360
+description: |
+  Unified Customer 360 semantic model spanning operational (Aurora) and
+  analytics (Redshift) data. Enables natural language queries across customer
+  profiles, addresses, products, and purchases with calculated business metrics.
+
+# ─────────────────────────────────────────────
+# Connections (configured in AtScale)
+# ─────────────────────────────────────────────
+# aurora_c360: PostgreSQL → Aurora (customer360_db)
+# redshift_c360: Redshift → Redshift Serverless (analytics_db)
+
+# ─────────────────────────────────────────────
+# Dimensions
+# ─────────────────────────────────────────────
+
+dimensions:
+
+  - unique_name: dim_customer
+    label: Customer
+    description: Customer profiles from operational database
+    type: standard
+    dataset: aurora_customer
+    key_columns:
+      - cid
+    attributes:
+      - unique_name: customer_id
+        label: Customer ID
+        key_column: cid
+      - unique_name: first_name
+        label: First Name
+        key_column: first_name
+      - unique_name: last_name
+        label: Last Name
+        key_column: last_name
+      - unique_name: full_name
+        label: Full Name
+        expression: "first_name || ' ' || last_name"
+      - unique_name: email
+        label: Email
+        key_column: email
+      - unique_name: phone
+        label: Phone
+        key_column: phone
+
+  - unique_name: dim_address
+    label: Address
+    description: Customer addresses
+    type: standard
+    dataset: aurora_address
+    key_columns:
+      - id
+    attributes:
+      - unique_name: address_id
+        label: Address ID
+        key_column: id
+      - unique_name: city
+        label: City
+        key_column: city
+      - unique_name: state
+        label: State
+        key_column: state
+      - unique_name: zip_code
+        label: Zip Code
+        key_column: zip
+      - unique_name: street
+        label: Street
+        key_column: street_name
+    relationships:
+      - unique_name: rel_address_customer
+        target_dimension: dim_customer
+        join_columns:
+          - from_column: cid
+            to_column: cid
+        type: many_to_one
+
+  - unique_name: dim_product
+    label: Product
+    description: Product catalog from analytics warehouse
+    type: standard
+    dataset: redshift_product
+    key_columns:
+      - id
+    attributes:
+      - unique_name: product_id
+        label: Product ID
+        key_column: id
+      - unique_name: product_name
+        label: Product Name
+        key_column: name
+      - unique_name: brand
+        label: Brand
+        key_column: brand
+      - unique_name: product_price
+        label: List Price
+        key_column: price
+
+  - unique_name: dim_category
+    label: Category
+    description: Product categories
+    type: standard
+    dataset: redshift_category
+    key_columns:
+      - id
+    attributes:
+      - unique_name: category_id
+        label: Category ID
+        key_column: id
+      - unique_name: dept_name
+        label: Department Name
+        key_column: dept_name
+      - unique_name: parent_category
+        label: Parent Category
+        key_column: parent
+    relationships:
+      - unique_name: rel_product_category
+        target_dimension: dim_product
+        join_columns:
+          - from_column: id
+            to_column: dept
+        type: one_to_many
+
+  - unique_name: dim_vendor
+    label: Vendor
+    description: Product vendors/suppliers
+    type: standard
+    dataset: redshift_vendor
+    key_columns:
+      - id
+    attributes:
+      - unique_name: vendor_id
+        label: Vendor ID
+        key_column: id
+      - unique_name: vendor_name
+        label: Vendor Name
+        key_column: vendor_name
+      - unique_name: industry
+        label: Industry
+        key_column: industry
+
+# ─────────────────────────────────────────────
+# Fact Table
+# ─────────────────────────────────────────────
+
+facts:
+
+  - unique_name: fact_purchase
+    label: Purchases
+    description: Purchase transactions (analytics warehouse)
+    dataset: redshift_purchase
+    dimension_links:
+      - unique_name: link_purchase_customer
+        dimension: dim_customer
+        join_columns:
+          - from_column: cid
+            to_column: cid
+        role: purchasing_customer
+      - unique_name: link_purchase_product
+        dimension: dim_product
+        join_columns:
+          - from_column: pid
+            to_column: id
+        role: purchased_product
+
+# ─────────────────────────────────────────────
+# Measures
+# ─────────────────────────────────────────────
+
+measures:
+
+  - unique_name: total_revenue
+    label: Total Revenue
+    description: Total sales revenue (price × quantity)
+    expression: "SUM(price * quantity)"
+    format: "$#,##0.00"
+    fact: fact_purchase
+
+  - unique_name: order_count
+    label: Order Count
+    description: Number of purchase transactions
+    expression: "COUNT(id)"
+    format: "#,##0"
+    fact: fact_purchase
+
+  - unique_name: units_sold
+    label: Units Sold
+    description: Total quantity of items sold
+    expression: "SUM(quantity)"
+    format: "#,##0"
+    fact: fact_purchase
+
+  - unique_name: avg_order_value
+    label: Average Order Value
+    description: Average revenue per transaction
+    expression: "SUM(price * quantity) / NULLIF(COUNT(id), 0)"
+    format: "$#,##0.00"
+    fact: fact_purchase
+
+  - unique_name: customer_lifetime_value
+    label: Customer Lifetime Value
+    description: Total spend by a customer across all purchases
+    expression: "SUM(price * quantity)"
+    format: "$#,##0.00"
+    fact: fact_purchase
+    # Note: When grouped by customer, this becomes per-customer CLV
+
+  - unique_name: distinct_customers
+    label: Distinct Customers
+    description: Count of unique customers
+    expression: "COUNT(DISTINCT cid)"
+    format: "#,##0"
+    fact: fact_purchase
+
+# ─────────────────────────────────────────────
+# Calculated Attributes (Derived Dimensions)
+# ─────────────────────────────────────────────
+
+calculated_attributes:
+
+  - unique_name: big_spender
+    label: Big Spender
+    description: "Customer with lifetime spend > $10,000"
+    dimension: dim_customer
+    expression: |
+      CASE WHEN SUM(fact_purchase.price * fact_purchase.quantity) > 10000
+           THEN 'Yes' ELSE 'No' END
+
+  - unique_name: large_order
+    label: Large Order
+    description: "Order with total > $500"
+    expression: |
+      CASE WHEN (price * quantity) > 500
+           THEN 'Yes' ELSE 'No' END
+    fact: fact_purchase
+
+  - unique_name: spend_tier
+    label: Spend Tier
+    description: Customer segmentation by total spend
+    dimension: dim_customer
+    expression: |
+      CASE 
+        WHEN SUM(fact_purchase.price * fact_purchase.quantity) > 50000 THEN 'Platinum'
+        WHEN SUM(fact_purchase.price * fact_purchase.quantity) > 10000 THEN 'Gold'
+        ELSE 'Standard'
+      END

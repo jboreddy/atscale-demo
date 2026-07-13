@@ -1,0 +1,83 @@
+# AtScale Helm Values for EKS Deployment
+# Reference: https://github.com/AtScaleInc/atscale-k8s-blueprints
+#
+# Customize this file based on the actual Helm chart structure from the blueprints repo.
+# This provides the baseline configuration for the C360 POC.
+
+global:
+  namespace: atscale
+
+# AtScale Engine Configuration
+engine:
+  replicaCount: 1  # Single replica for POC
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "8Gi"
+    limits:
+      cpu: "4000m"
+      memory: "16Gi"
+  
+  persistence:
+    enabled: true
+    storageClass: "gp3"
+    size: "50Gi"
+  
+  # Java heap settings for AtScale engine
+  javaOpts: "-Xms4g -Xmx12g"
+
+# AtScale Design Center
+designCenter:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "1000m"
+      memory: "4Gi"
+
+# Metadata Database (embedded PostgreSQL for POC)
+metadataDb:
+  embedded: true
+  persistence:
+    enabled: true
+    storageClass: "gp3"
+    size: "10Gi"
+
+# Ingress Configuration (AWS ALB)
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+  hosts:
+    - paths:
+        - path: /
+          pathType: Prefix
+          port: 10500  # AtScale Design Center port
+
+# Service Account (for IRSA)
+serviceAccount:
+  create: false  # We create it via CDK (AtScaleServiceRole)
+  name: "atscale-service"
+
+# License Configuration
+license:
+  # Set via --set license.key=<YOUR_LICENSE_KEY> during helm install
+  key: ""
+
+# Data Connection Defaults
+# These will be configured post-deployment via REST API or Design Center UI
+connections:
+  aurora:
+    name: "aurora_c360"
+    type: "postgresql"
+    # host, port, database, credentials populated at runtime
+  redshift:
+    name: "redshift_c360"
+    type: "redshift"
+    # host, port, database, credentials populated at runtime

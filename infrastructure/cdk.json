@@ -1,0 +1,31 @@
+{
+  "app": "python3 app.py",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "requirements*.txt",
+      "source.bat",
+      "**/__pycache__",
+      "**/.pytest_cache",
+      "tests"
+    ]
+  },
+  "context": {
+    "project_name": "c360-poc",
+    "aws_account": "652341767951",
+    "aws_region": "us-east-1",
+    "vpc_cidr": "10.1.0.0/16",
+    "eks_cluster_name": "c360-poc-cluster",
+    "eks_version": "1.36",
+    "aurora_instance_class": "r6g.large",
+    "aurora_engine_version": "16.13",
+    "aurora_database_name": "customer360_db",
+    "redshift_namespace": "c360-atscale-ns",
+    "redshift_workgroup": "c360-atscale-wg",
+    "redshift_database": "analytics_db",
+    "redshift_base_capacity": 8,
+    "s3_bucket_prefix": "c360-poc-data"
+  }
+}

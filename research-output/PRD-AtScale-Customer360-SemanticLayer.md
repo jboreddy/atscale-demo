@@ -270,7 +270,7 @@ AtScale resolves this by defining a **Customer dimension** with `cid` as the key
 
 | Resource | Configuration |
 |----------|--------------|
-| **EKS Cluster** | Kubernetes 1.29+ |
+| **EKS Cluster** | Kubernetes 1.36 |
 | **Node Group** | Managed, 2-4 nodes |
 | **Instance Type** | m5.2xlarge (8 vCPU, 32 GB RAM) |
 | **Storage** | gp3 EBS volumes, 100GB per node |
@@ -288,7 +288,7 @@ AtScale resolves this by defining a **Customer dimension** with `cid` as the key
 
 | Resource | Configuration |
 |----------|--------------|
-| **Engine** | Aurora PostgreSQL 15.x |
+| **Engine** | Aurora PostgreSQL 16.13 |
 | **Instance Class** | db.r6g.large (2 vCPU, 16 GB) |
 | **Storage** | Aurora auto-scaling (min 10 GB) |
 | **Database Name** | customer360_db |
@@ -308,8 +308,8 @@ AtScale resolves this by defining a **Customer dimension** with `cid` as the key
 | Resource | Configuration |
 |----------|--------------|
 | **Type** | Redshift Serverless (or ra3.xlplus single-node) |
-| **Namespace** | customer360-ns |
-| **Workgroup** | customer360-wg |
+| **Namespace** | c360-atscale-ns |
+| **Workgroup** | c360-atscale-wg |
 | **Database** | analytics_db |
 | **Base Capacity** | 8 RPU (Serverless) or 1 node (Provisioned) |
 | **Subnet Group** | Private subnets |
