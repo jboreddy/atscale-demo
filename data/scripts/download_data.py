@@ -11,21 +11,21 @@ GITHUB_BASE = (
     "/main/examples/c360/data"
 )
 
-# CSV files to download
-# Aurora tables (customer/operational data)
+# CSV files to download — mapped to local names for consistency
+# Format: (remote_filename, local_filename)
 AURORA_FILES = [
-    "customer.csv",
-    "address.csv",
-    "credit_card.csv",
-    "rewards_account.csv",
+    ("US_Customers.csv", "customer.csv"),
+    ("US_Locations.csv", "address.csv"),
+    ("CreditCards.csv", "credit_card.csv"),
+    ("Rewards.csv", "rewards_account.csv"),
 ]
 
 # Redshift tables (product/purchase analytics data)
 REDSHIFT_FILES = [
-    "purchase.csv",
-    "product.csv",
-    "category.csv",
-    "vendor.csv",
+    ("Purchases.csv", "purchase.csv"),
+    ("product_catalog.csv", "product.csv"),
+    ("category.csv", "category.csv"),
+    ("Vendors.csv", "vendor.csv"),
 ]
 
 ALL_FILES = AURORA_FILES + REDSHIFT_FILES
@@ -43,15 +43,15 @@ def download_csvs(output_dir: str = None) -> None:
     print(f"Source: {GITHUB_BASE}")
     print("-" * 60)
 
-    for filename in ALL_FILES:
-        url = f"{GITHUB_BASE}/{filename}"
-        dest = output_path / filename
+    for remote_name, local_name in ALL_FILES:
+        url = f"{GITHUB_BASE}/{remote_name}"
+        dest = output_path / local_name
 
-        print(f"  Downloading {filename}...", end=" ")
+        print(f"  Downloading {remote_name} → {local_name}...", end=" ")
         try:
             urllib.request.urlretrieve(url, dest)
-            # Count rows (excluding header)
-            with open(dest) as f:
+            # Count rows (excluding header) - handle encoding issues
+            with open(dest, encoding="utf-8", errors="replace") as f:
                 row_count = sum(1 for _ in f) - 1
             print(f"✓ ({row_count} rows)")
         except Exception as e:

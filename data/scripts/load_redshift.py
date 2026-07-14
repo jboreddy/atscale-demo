@@ -86,8 +86,10 @@ def load_table_from_s3(conn, table_name: str, bucket: str, s3_key: str, iam_role
     IAM_ROLE '{iam_role}'
     CSV
     IGNOREHEADER 1
+    ACCEPTINVCHARS '?'
     DATEFORMAT 'auto'
     TIMEFORMAT 'auto'
+    MAXERROR 10
     REGION 'us-east-1';
     """
 

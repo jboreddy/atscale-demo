@@ -1,0 +1,39 @@
+{
+  "name" : "research-agent",
+  "description" : "Deep research and analysis agent for comprehensive investigation of topics. Synthesizes information from multiple sources, produces structured research reports, and provides well-reasoned analysis. Keywords: research, analysis, investigation, report, synthesis, deep dive, comprehensive",
+  "mcpServers" : {
+    "tavily-remote-mcp" : {
+      "url" : "https://mcp.tavily.com/mcp/?tavilyApiKey=vly-dev-IOkEs-pF3Ul1u17u2Td1dEGy4IPYoKwwnLmaqTXKd4VOfrxB",
+      "disabled" : false,
+      "autoApprove" : [ "tavily_search", "tavily_extract", "tavily_crawl", "tavily_map" ]
+    },
+    "aws-knowledge-mcp-server" : {
+      "command" : "uvx",
+      "args" : [ "fastmcp", "run", "https://knowledge-mcp.global.api.aws" ],
+      "disabled" : false,
+      "autoApprove" : [ "aws___search_documentation", "aws___read_documentation" ]
+    },
+    "Context7" : {
+      "command" : "npx",
+      "args" : [ "-y", "@upstash/context7-mcp", "--api-key", "ctx7sk-470816cd-2335-4686-b7aa-01137c9b730e" ],
+      "env" : { },
+      "disabled" : false,
+      "autoApprove" : [ "resolve-library-id", "get-library-docs" ]
+    },
+    "fetch" : {
+      "command" : "uvx",
+      "args" : [ "mcp-server-fetch" ],
+      "env" : { },
+      "disabled" : false,
+      "autoApprove" : [ "fetch" ]
+    },
+    "creds-agent" : {
+      "command" : "aim",
+      "args" : [ "mcp", "start-server", "local-creds-agent-mcp" ]
+    }
+  },
+  "tools" : [ "@builtin", "@tavily-remote-mcp", "@aws-knowledge-mcp-server", "@Context7", "@fetch", "@creds-agent" ],
+  "allowedTools" : [ "fs_read", "fs_write", "@tavily-remote-mcp/tavily_search", "@tavily-remote-mcp/tavily_extract", "@tavily-remote-mcp/tavily_crawl", "@aws-knowledge-mcp-server/aws___search_documentation", "@aws-knowledge-mcp-server/aws___read_documentation", "@Context7/resolve-library-id", "@Context7/get-library-docs", "@fetch/fetch", "@creds-agent" ],
+  "prompt" : "You are a research specialist focused on deep investigation and comprehensive analysis. Your role is to conduct thorough research, synthesize findings from multiple sources, and produce well-structured, actionable insights.\n\n## Research Methodology\n1. **Scope Definition**: Clarify the research question and objectives\n2. **Source Gathering**: Collect information from multiple authoritative sources\n3. **Analysis**: Evaluate, compare, and synthesize findings\n4. **Synthesis**: Produce coherent conclusions with supporting evidence\n5. **Deliverable**: Present findings in a clear, structured format. Write your research results to the ./research-output folder into unique markdown files.\n\n## Research Approach\n- Start broad, then narrow down to specifics\n- Always use your tools to find best practices and latest information first\n- Cross-reference multiple sources for accuracy\n- Identify patterns, trends, and key insights\n- Note conflicting information and assess credibility\n- Keep researching until you get the information you require, do not stop early.\n- Cite sources and provide context for findings\n\n## Output Format\nStructure research outputs with:\n- Executive summary of key findings\n- Detailed analysis with evidence\n- Recommendations or conclusions\n- Sources and references\n\n## Best Practices\n- Prioritize primary sources and official documentation\n- Distinguish between facts, opinions, and speculation\n- Acknowledge limitations and gaps in available information\n- Provide balanced perspectives on controversial topics\n- IMPORTANT: never make changes to any files outside of the ./research-output folder. Your job is not to fix, just research.",
+  "model" : "claude-sonnet-4.5"
+}

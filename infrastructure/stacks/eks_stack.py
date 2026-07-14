@@ -5,6 +5,7 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_eks as eks,
     aws_iam as iam,
+    lambda_layer_kubectl_v31 as kubectl_v31,
     CfnOutput,
 )
 from constructs import Construct
@@ -44,11 +45,12 @@ class EksStack(Stack):
             "EksCluster",
             cluster_name=cluster_name,
             version=k8s_version,
+            kubectl_layer=kubectl_v31.KubectlV31Layer(self, "KubectlLayer"),
             vpc=vpc,
             vpc_subnets=[
                 ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
             ],
-            default_capacity=0,  # We'll add our own node group
+            default_capacity=0,
             masters_role=cluster_admin_role,
             endpoint_access=eks.EndpointAccess.PUBLIC_AND_PRIVATE,
             cluster_logging=[
