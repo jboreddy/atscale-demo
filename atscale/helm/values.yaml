@@ -104,3 +104,10 @@ in-mem-aggs:
 # Telemetry collector
 telemetry:
   enabled: false  # Disable for POC
+
+# Ingress Gateway (nginx) - fix for large Keycloak cookies
+# Without this, browsers get "Request Header Or Cookie Too Large" (400)
+atscale-proxy:
+  nginxHttpConfig: |
+    large_client_header_buffers 4 32k;
+    client_header_buffer_size 16k;
