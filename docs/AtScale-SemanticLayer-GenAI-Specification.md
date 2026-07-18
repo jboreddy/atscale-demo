@@ -76,9 +76,9 @@ AtScale provides the **universal semantic layer** that sits between AI agents an
 │                                                                       │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  MCP Server          │  Query Engine      │  Design Center    │   │
-│  │  - NL → SQL          │  - Federation      │  - Visual Model   │   │
-│  │  - Schema metadata   │  - Optimization    │  - SML (Git)      │   │
-│  │  - Result formatting │  - Aggregates      │  - AI-Assisted    │   │
+│  │  - NL → SQL          │  - Optimization    │  - Visual Model   │   │
+│  │  - Schema metadata   │  - Aggregates      │  - SML (Git)      │   │
+│  │  - Result formatting │  - Pushdown        │  - AI-Assisted    │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                       │
 │  ┌──────────────────────────────────────────────────────────────┐   │
@@ -88,21 +88,27 @@ AtScale provides the **universal semantic layer** that sits between AI agents an
 │  │  - Column Masking                                             │   │
 │  │  - Full Query Audit Trail                                     │   │
 │  └──────────────────────────────────────────────────────────────┘   │
-└────────────────────┬────────────────────────────┬────────────────────┘
-                     │                            │
-          SQL pushdown                  SQL pushdown
-                     │                            │
-                     ▼                            ▼
-┌──────────────────────────────┐  ┌────────────────────────────────────┐
-│    Amazon Aurora PostgreSQL   │  │       Amazon Redshift Serverless   │
-│                               │  │                                    │
-│    Operational Data:          │  │    Analytical Data:                │
-│    - Customer profiles        │  │    - Purchase transactions         │
-│    - Addresses                │  │    - Product catalog               │
-│    - Credit cards             │  │    - Categories                    │
-│    - Rewards accounts         │  │    - Vendors                       │
-└──────────────────────────────┘  └────────────────────────────────────┘
+└──────────────────────────────────────────────┬───────────────────────┘
+                                               │
+                                    SQL pushdown
+                                               │
+                                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Amazon Redshift Serverless                         │
+│                                                                       │
+│    ┌─────────────────────────┐    ┌─────────────────────────────┐   │
+│    │  Customer Data           │    │  Analytics Data              │   │
+│    │  - customer              │    │  - purchase                  │   │
+│    │  - address               │    │  - product                   │   │
+│    │  - credit_card           │    │  - category                  │   │
+│    │  - rewards_account       │    │  - vendor                    │   │
+│    └─────────────────────────┘    └─────────────────────────────┘   │
+│                                                                       │
+│    All C360 data co-located for optimal join performance             │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Architecture Decision:** All Customer 360 data is co-located in Amazon Redshift Serverless. This enables AtScale to push down complex joins (e.g., customer + purchase on `cid`) as single optimized SQL queries to one engine, delivering the best performance and simplest operational model. Aurora PostgreSQL may still serve as the operational system of record, with data replicated to Redshift for analytics via ETL/CDC pipelines in production.
 
 ### 2.2 Request Flow (Detailed)
 
@@ -115,10 +121,10 @@ AtScale provides the **universal semantic layer** that sits between AI agents an
 | 5 | Agent | Invokes AtScale tool via MCP protocol |
 | 6 | AgentCore Gateway | Validates JWT, injects AtScale credentials |
 | 7 | AtScale MCP Server | Receives query, validates against semantic model |
-| 8 | AtScale Query Engine | Plans federated execution across data sources |
-| 9 | AtScale | Pushes optimized SQL to Aurora and/or Redshift |
-| 10 | Data Sources | Execute SQL, return results |
-| 11 | AtScale | Joins results on shared dimension keys, applies security |
+| 8 | AtScale Query Engine | Plans optimized query execution |
+| 9 | AtScale | Pushes optimized SQL to Redshift (single engine, all C360 data co-located) |
+| 10 | Redshift | Executes SQL with native joins across customer + product + purchase tables |
+| 11 | AtScale | Receives results, applies security policies (RLS, column masking) |
 | 12 | Agent | Receives results, sends to FM for summarization |
 | 13 | Foundation Model | Formats human-readable answer |
 | 14 | Chat App | Displays answer, SQL used, and data sources cited |
@@ -149,25 +155,28 @@ A retail enterprise needs unified customer analytics across operational and anal
 
 ### 3.2 Data Architecture
 
-**Operational Data (Aurora PostgreSQL):**
+All Customer 360 data is co-located in **Amazon Redshift Serverless** for optimal query performance. In a production environment, operational data would reside in Aurora PostgreSQL with replication to Redshift via ETL/CDC pipelines.
 
-| Table | Key Columns | Description |
-|-------|-------------|-------------|
-| `customer` | cid (PK), first_name, last_name, email, ssn, phone, location | Customer profiles |
-| `address` | id (PK), street_number, street_name, state, zip, city | Customer addresses |
-| `credit_card` | id (PK), cid (FK), card_num, card_type | Payment methods |
-| `rewards_account` | id (PK), cid (FK), account_id, create_date | Loyalty program |
+**Customer 360 Data (Amazon Redshift Serverless):**
 
-**Analytical Data (Amazon Redshift):**
+| Table | Key Columns | Description | Origin |
+|-------|-------------|-------------|--------|
+| `customer` | cid (PK), first_name, last_name, email, ssn, phone, location | Customer profiles | Operational |
+| `address` | id (PK), street_number, street_name, state, zip, city | Customer addresses | Operational |
+| `credit_card` | id (PK), cid (FK), card_num, card_type | Payment methods | Operational |
+| `rewards_account` | id (PK), cid (FK), account_id, create_date | Loyalty program | Operational |
+| `purchase` | id, pid, purchase_date, quantity, price, cid, card | Purchase transactions | Analytical |
+| `product` | id (PK), name, brand, price, dept | Product catalog | Analytical |
+| `category` | id (PK), dept_name, parent | Product categories | Analytical |
+| `vendor` | id (PK), vendor_name, industry | Suppliers | Analytical |
 
-| Table | Key Columns | Description |
-|-------|-------------|-------------|
-| `purchase` | id, pid, purchase_date, quantity, price, cid, card | Purchase transactions |
-| `product` | id (PK), name, brand, price, dept | Product catalog |
-| `category` | id (PK), dept_name, parent | Product categories |
-| `vendor` | id (PK), vendor_name, industry | Suppliers |
+**Key Design Decision:** Co-locating all data in Redshift enables AtScale to push down complex joins (e.g., customer + address + purchase) as a single optimized SQL query to one engine. This avoids the complexity and performance overhead of cross-database federation while delivering sub-second query performance with aggregates.
 
-**Cross-Source Identity:** The shared key `cid` (customer ID) links Aurora customer records with Redshift purchase transactions. AtScale resolves this join at the semantic layer without requiring ETL or data movement.
+**Production Pattern:** In a real-world deployment, the architecture would include:
+- Aurora PostgreSQL as the operational system of record
+- AWS DMS or custom CDC pipeline replicating to Redshift
+- AtScale querying Redshift (the analytical copy) for all semantic layer operations
+- Near-real-time data freshness (minutes, not hours)
 
 ### 3.3 Semantic Model: Customer_360
 
@@ -175,8 +184,8 @@ A retail enterprise needs unified customer analytics across operational and anal
 
 | Dimension | Source | Key | Attributes |
 |-----------|--------|-----|------------|
-| Dim_Customer | Aurora | cid | first_name, last_name, full_name, email, phone |
-| Dim_Address | Aurora | id | city, state, zip_code, street |
+| Dim_Customer | Redshift | cid | first_name, last_name, full_name, email, phone |
+| Dim_Address | Redshift | id | city, state, zip_code, street |
 | Dim_Product | Redshift | id | product_name, brand, price |
 | Dim_Category | Redshift | id | dept_name, parent_category |
 | Dim_Vendor | Redshift | id | vendor_name, industry |
@@ -209,13 +218,14 @@ A retail enterprise needs unified customer analytics across operational and anal
 
 ### 3.4 Sample Queries
 
-| Category | Question | Data Sources | Expected Behavior |
+| Category | Question | Tables Used | Expected Behavior |
 |----------|----------|-------------|-------------------|
-| **Single-source (Aurora)** | "List 10 customers and their state" | Aurora only | Query customer + address |
-| **Single-source (Redshift)** | "Top 10 products by units sold" | Redshift only | Aggregate purchases by product |
-| **Federated** | "Top 10 spenders with their state" | Aurora + Redshift | Join on cid, aggregate spend |
-| **Derived metrics** | "Big spenders per state" | Aurora + Redshift | Apply CLV threshold + group by state |
-| **Time-series** | "Revenue trend by month" | Redshift | Group by date dimension |
+| **Customer** | "List 10 customers and their state" | customer, address | Join on location key |
+| **Product** | "Top 10 products by units sold" | purchase, product | Aggregate by product |
+| **Cross-domain** | "Top 10 spenders with their state" | customer, address, purchase | Join on cid + aggregate spend |
+| **Derived metrics** | "Big spenders per state" | customer, address, purchase | Apply CLV threshold + group by state |
+| **Time-series** | "Revenue trend by month" | purchase | Group by date dimension |
+| **Category analysis** | "Revenue by product category" | purchase, product, category | Multi-table join + aggregation |
 
 ---
 
@@ -224,9 +234,10 @@ A retail enterprise needs unified customer analytics across operational and anal
 ### 4.1 Universal Semantic Layer
 
 - **One model, many consumers** — BI tools (SQL/MDX/DAX), AI agents (MCP), data science (Python/REST)
-- **No data movement** — queries pushed to source systems at runtime
+- **No data duplication for analytics** — queries pushed to the warehouse at runtime
 - **Business logic centralization** — metrics defined once, consistent everywhere
 - **Composable architecture** — SML (Semantic Modeling Language) enables Git-based version control
+- **Multi-source support** — connect to Redshift, Snowflake, Databricks, BigQuery, and more
 
 ### 4.2 AI-Assisted Modeling Engine
 
@@ -269,12 +280,16 @@ AtScale's AI-powered modeling capabilities accelerate semantic model development
 
 ### 4.5 Data Source Connectivity
 
+AtScale connects to cloud data warehouses and lakehouses via JDBC:
+
 | AWS Service | Connection Type | Use Case |
 |-------------|----------------|----------|
-| Amazon Redshift | JDBC (native connector) | Analytics warehouse, aggregate storage |
-| Amazon Aurora (PostgreSQL/MySQL) | JDBC | Operational databases |
-| Amazon Athena | JDBC | Data lake (S3) queries |
-| Amazon Redshift Spectrum | Via Redshift | S3 external tables |
+| Amazon Redshift | JDBC (native connector) | Primary analytics warehouse, aggregate storage |
+| Amazon Redshift Spectrum | Via Redshift | Query S3 data lake as external tables |
+| Amazon Athena | JDBC | Ad-hoc data lake queries |
+| Amazon Aurora (PostgreSQL/MySQL) | JDBC | Operational databases (when co-located or via federated query) |
+
+**Recommended pattern:** Co-locate all analytical data in a single warehouse (e.g., Redshift) for optimal join performance. Use CDC/ETL pipelines to replicate operational data from transactional systems. AtScale then queries one engine with full join capability.
 
 ---
 
@@ -446,14 +461,15 @@ User Identity (SSO) → Agent Request → AgentCore Gateway (JWT)
 | Component | AWS Service | Purpose |
 |-----------|-------------|---------|
 | Container Orchestration | Amazon EKS | Host AtScale + application |
-| Operational Database | Amazon Aurora PostgreSQL | Customer data |
-| Analytics Warehouse | Amazon Redshift Serverless | Purchase/product data |
+| Analytics Warehouse | Amazon Redshift Serverless | All C360 data (single source of truth for analytics) |
 | AI/ML | Amazon Bedrock | Foundation model inference |
 | Agent Runtime | Amazon Bedrock AgentCore | Managed agent hosting |
 | Object Storage | Amazon S3 | Data staging, aggregate storage |
 | Secrets | AWS Secrets Manager | Credential management |
 | Identity | Amazon Cognito / External IdP | User authentication |
 | Networking | VPC + NLB | Secure, isolated network |
+
+> **Note:** In production, Amazon Aurora PostgreSQL serves as the operational database with CDC/ETL replication to Redshift. For analytics and AI workloads, AtScale queries Redshift exclusively.
 
 ### 6.3 Deployment Method
 
@@ -483,13 +499,13 @@ unique_name: customer_360
 object_type: model
 label: Customer 360
 description: |
-  Unified Customer 360 semantic model spanning operational and
-  analytics data sources with shared customer dimension key.
+  Unified Customer 360 semantic model with all data co-located
+  in Amazon Redshift for optimal join performance and query pushdown.
 
 dimensions:
   - unique_name: dim_customer
     label: Customer
-    dataset: aurora_customer
+    dataset: redshift_customer
     key_columns: [cid]
     attributes:
       - unique_name: full_name
@@ -571,11 +587,13 @@ AtScale automatically:
 
 ### 9.1 Additional Data Sources
 
-The same architecture extends to:
-- Amazon Athena (data lake queries on S3)
-- Amazon Redshift Spectrum (external tables)
-- Additional Aurora clusters (multi-region)
-- Cross-account data sharing
+The same architecture extends to other cloud data platforms:
+- Amazon Redshift Spectrum (external tables on S3)
+- Amazon Athena (serverless S3 queries)
+- Snowflake, Databricks, Google BigQuery
+- Multiple Redshift clusters (cross-account data sharing)
+
+**Multi-source pattern:** When data spans multiple systems, consolidate analytical copies in a single warehouse (e.g., Redshift) using ETL/CDC pipelines. AtScale queries the consolidated warehouse for optimal performance. Each source can have its own AtScale connection, but joins must resolve within a single engine.
 
 ### 9.2 Additional AI Agent Frameworks
 
@@ -600,7 +618,7 @@ The same semantic model simultaneously serves:
 This specification demonstrates how AtScale's universal semantic layer, deployed on Amazon EKS, provides the critical **meaning layer** between AI agents and enterprise data. The architecture delivers:
 
 ✅ **Natural language access** to governed enterprise data  
-✅ **Federated queries** across Aurora and Redshift without ETL  
+✅ **Optimized query pushdown** to Amazon Redshift with native joins  
 ✅ **Business logic consistency** across AI agents and BI tools  
 ✅ **Enterprise security** with SSO, RBAC/ABAC, RLS, and column masking  
 ✅ **Full traceability** from user question to data source access  
@@ -622,8 +640,7 @@ The semantic layer is the missing piece between powerful foundation models and t
 | Semantic Layer | AtScale (on Amazon EKS) |
 | Semantic Model | SML (version-controlled in Git) |
 | AI Modeling | AtScale AI-Assisted Modeling Engine |
-| Operational DB | Amazon Aurora PostgreSQL |
-| Analytics DB | Amazon Redshift Serverless |
+| Analytics Warehouse | Amazon Redshift Serverless (all C360 data) |
 | Container Platform | Amazon EKS |
 | Object Storage | Amazon S3 |
 | Identity | Keycloak + Enterprise IdP (SSO) |
@@ -636,8 +653,7 @@ Data source: [Stardog C360 Knowledge Kit](https://github.com/stardog-union/knowl
 
 | Database | Tables | Rows (Sample) |
 |----------|--------|---------------|
-| Aurora PostgreSQL | customer, address, credit_card, rewards_account | ~2,000 |
-| Redshift Serverless | purchase, product, category, vendor | ~3,500 |
+| Redshift Serverless | customer, address, credit_card, rewards_account, purchase, product, category, vendor | ~5,500 |
 
 ---
 
