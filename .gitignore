@@ -43,3 +43,4 @@ cdk.out/
 
 # Docker
 docker-compose.override.yml
+research-output/atscale-semantic-layer-implementation-guide.md
