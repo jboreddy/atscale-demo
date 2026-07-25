@@ -2,27 +2,14 @@ unique_name: Product Dimension
 object_type: dimension
 label: Product Dimension
 type: standard
+
 hierarchies:
   - unique_name: Product Hierarchy
     label: Product Hierarchy
     levels:
       - unique_name: Category
-        level_attributes:
-          - unique_name: Category
-            label: Category
-            dataset: ds_category
-            name_column: dept_name
-            key_columns:
-              - id
       - unique_name: Product Name
-        level_attributes:
-          - unique_name: Product Name
-            label: Product Name
-            is_unique_key: true
-            dataset: ds_product
-            name_column: name
-            key_columns:
-              - id
+        secondary_attributes:
           - unique_name: d_brand
             label: Brand
             dataset: ds_product
@@ -35,7 +22,19 @@ hierarchies:
             name_column: price
             key_columns:
               - price
-    filter:
-      dataset: ds_product
-      column: dept
-      joins_to_level: Category
+
+level_attributes:
+  - unique_name: Category
+    label: Category
+    dataset: ds_category
+    name_column: dept_name
+    key_columns:
+      - id
+
+  - unique_name: Product Name
+    label: Product Name
+    is_unique_key: true
+    dataset: ds_product
+    name_column: name
+    key_columns:
+      - id

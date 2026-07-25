@@ -2,19 +2,13 @@ unique_name: Customer Dimension
 object_type: dimension
 label: Customer Dimension
 type: standard
+
 hierarchies:
   - unique_name: Customer Hierarchy
     label: Customer Hierarchy
     levels:
       - unique_name: Customer Name
-        level_attributes:
-          - unique_name: Customer Name
-            label: Customer Name
-            is_unique_key: true
-            dataset: ds_customer
-            name_column: full_name
-            key_columns:
-              - cid
+        secondary_attributes:
           - unique_name: d_first_name
             label: First Name
             dataset: ds_customer
@@ -39,6 +33,16 @@ hierarchies:
             name_column: phone
             key_columns:
               - phone
+
+level_attributes:
+  - unique_name: Customer Name
+    label: Customer Name
+    is_unique_key: true
+    dataset: ds_customer
+    name_column: full_name
+    key_columns:
+      - cid
+
 relationships:
   - unique_name: Customer_Address
     from:

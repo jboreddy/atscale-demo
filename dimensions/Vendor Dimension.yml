@@ -2,24 +2,26 @@ unique_name: Vendor Dimension
 object_type: dimension
 label: Vendor Dimension
 type: standard
+
 hierarchies:
   - unique_name: Vendor Hierarchy
     label: Vendor Hierarchy
     levels:
       - unique_name: Industry
-        level_attributes:
-          - unique_name: Industry
-            label: Industry
-            dataset: ds_vendor
-            name_column: industry
-            key_columns:
-              - industry
       - unique_name: Vendor Name
-        level_attributes:
-          - unique_name: Vendor Name
-            label: Vendor Name
-            is_unique_key: true
-            dataset: ds_vendor
-            name_column: vendor_name
-            key_columns:
-              - id
+
+level_attributes:
+  - unique_name: Industry
+    label: Industry
+    dataset: ds_vendor
+    name_column: industry
+    key_columns:
+      - industry
+
+  - unique_name: Vendor Name
+    label: Vendor Name
+    is_unique_key: true
+    dataset: ds_vendor
+    name_column: vendor_name
+    key_columns:
+      - id
