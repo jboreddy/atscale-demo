@@ -32,9 +32,6 @@ relationships:
       dimension: Vendor Dimension
       level: Vendor Name
 
-dimensions:
-  - Address Dimension
-
 metrics:
   - unique_name: Total Revenue
     folder: Sales Metrics
