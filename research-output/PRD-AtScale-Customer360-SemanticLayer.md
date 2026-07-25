@@ -1015,3 +1015,271 @@ The following are explicitly **out of scope** for this POC:
 ---
 
 **END OF PRD**
+
+
+---
+
+## 17. Phase 2 Requirements (Production-Grade)
+
+### 17.1 Overview
+
+Upgrade the POC from local development to a production-ready architecture:
+
+| Component | Phase 1 (POC - Complete) | Phase 2 (Production) |
+|-----------|-------------------------|---------------------|
+| Agent Runtime | Local Python process | Amazon Bedrock AgentCore Runtime |
+| Semantic Layer Integration | Direct PostgreSQL (port 15432) | AtScale MCP Server |
+| Chat Application | Local Streamlit | Streamlit on EKS (ALB ingress) |
+| Authentication | None | Amazon Cognito (OIDC) |
+| Agent Invocation | In-process function call | AgentCore Gateway (JWT validated) |
+
+### 17.2 Amazon Bedrock AgentCore Deployment
+
+#### Agent Runtime
+
+| Requirement | Details |
+|-------------|---------|
+| Deploy Strands Agent to AgentCore Runtime | Agent packaged and hosted in managed environment |
+| Foundation Model | Claude Sonnet 4.6 (us.anthropic.claude-sonnet-4-6) |
+| Tool integration | Via AgentCore Gateway → AtScale MCP Server |
+| Session management | AgentCore handles session/conversation state |
+| Scaling | Managed concurrency by AgentCore |
+| Credential management | AgentCore Identity stores AtScale credentials |
+
+#### Agent Gateway
+
+| Requirement | Details |
+|-------------|---------|
+| Inbound authentication | JWT validation from Amazon Cognito |
+| MCP server registration | AtScale MCP Server registered as tool target |
+| Credential injection | AtScale token injected at Gateway hop |
+| Rate limiting | Configurable per-user throttling |
+| Observability | CloudWatch metrics and logs |
+
+### 17.3 AtScale MCP Server Integration
+
+#### MCP Server Configuration
+
+| Requirement | Details |
+|-------------|---------|
+| Deploy AtScale MCP Server | Container on EKS (namespace: `atscale`) |
+| Protocol | Standard MCP over HTTP/SSE |
+| Registration | Registered with AgentCore Gateway as tool target |
+| Authentication | Service account credentials via AgentCore Identity |
+
+#### MCP Tools to Expose
+
+| Tool | Purpose | Input | Output |
+|------|---------|-------|--------|
+| `atscale_ask` | Natural language query | Question string | Results + SQL + provenance |
+| `atscale_query` | Execute semantic SQL | SQL string | Result set |
+| `atscale_schema` | Model discovery | Model name | Dimensions, metrics, metadata |
+
+#### AgentCore Gateway MCP Registration
+
+```json
+{
+  "toolTargetId": "atscale-mcp-server",
+  "toolTargetType": "MCP_SERVER",
+  "endpoint": "http://atscale-mcp-server.atscale.svc.cluster.local:3000",
+  "authentication": {
+    "type": "CREDENTIAL_PROVIDER",
+    "credentialProviderId": "atscale-credentials"
+  }
+}
+```
+
+### 17.4 Streamlit Deployment on EKS
+
+#### Application Deployment
+
+| Requirement | Details |
+|-------------|---------|
+| Deployment target | EKS cluster (namespace: `c360-app`) |
+| Container image | Built from `app/Dockerfile`, pushed to ECR |
+| Replicas | 1 (POC), auto-scaling optional |
+| External access | AWS ALB via Ingress (internet-facing) |
+| Service account | IRSA for Bedrock access (bedrock-agent SA) |
+| Health check | `/_stcore/health` endpoint |
+
+#### Kubernetes Manifests Required
+
+- Deployment (Streamlit container)
+- Service (ClusterIP, port 8501)
+- Ingress (ALB, internet-facing, port 443)
+- ConfigMap (environment variables)
+- Secret (AtScale credentials from Secrets Manager)
+
+#### Architecture
+
+```
+Internet → ALB (HTTPS/443) → Streamlit Pod (8501) → AgentCore Gateway (JWT)
+                                                         ↓
+                                                    AgentCore Runtime (Agent)
+                                                         ↓
+                                                    AtScale MCP Server
+                                                         ↓
+                                                    AtScale → Redshift
+```
+
+### 17.5 Amazon Cognito (Authentication & Authorization)
+
+#### User Pool Configuration
+
+| Requirement | Details |
+|-------------|---------|
+| User Pool | Create new pool for C360 app |
+| App Client | Streamlit app registered as OIDC client |
+| Domain | Cognito hosted UI or custom domain |
+| Flows | Authorization Code flow (with PKCE) |
+| MFA | Optional for POC, recommended for production |
+| Token expiry | Access: 1 hour, Refresh: 30 days |
+
+#### User Groups (Authorization)
+
+| Group | Permissions | Data Access |
+|-------|-------------|-------------|
+| `c360-admin` | Full model access, all data | No restrictions |
+| `c360-analyst` | Query access, filtered data | Row-level security applied |
+| `c360-viewer` | Read-only, limited metrics | Restricted dimensions |
+
+#### Integration Points
+
+| Integration | Details |
+|-------------|---------|
+| Streamlit → Cognito | OIDC login flow (redirect to Cognito hosted UI) |
+| Cognito → AgentCore Gateway | JWT token passed in Authorization header |
+| Gateway validates JWT | Cognito User Pool as IdP |
+| User identity propagated | To AtScale for RLS/audit |
+
+#### Authentication Flow
+
+```
+1. User opens Streamlit app
+2. Streamlit checks session → no token → redirects to Cognito hosted UI
+3. User authenticates (username/password + optional MFA)
+4. Cognito returns authorization code
+5. Streamlit exchanges code for JWT tokens (access + id + refresh)
+6. Streamlit calls AgentCore Gateway with JWT in Authorization header
+7. Gateway validates JWT against Cognito User Pool
+8. Gateway extracts user identity, forwards to AgentCore Runtime
+9. Agent invokes AtScale MCP tool (credential injected by Gateway)
+10. AtScale applies user's security policies based on identity
+11. Results flow back through the chain to user
+```
+
+#### Cognito Infrastructure (CDK)
+
+```python
+# Add to infrastructure CDK
+user_pool = cognito.UserPool(
+    self, "C360UserPool",
+    user_pool_name="c360-user-pool",
+    sign_in_aliases=cognito.SignInAliases(email=True),
+    password_policy=cognito.PasswordPolicy(
+        min_length=8,
+        require_digits=True,
+        require_lowercase=True,
+        require_uppercase=True,
+    ),
+    mfa=cognito.Mfa.OPTIONAL,
+)
+
+app_client = user_pool.add_client(
+    "StreamlitClient",
+    auth_flows=cognito.AuthFlow(
+        user_password=True,
+        user_srp=True,
+    ),
+    o_auth=cognito.OAuthSettings(
+        flows=cognito.OAuthFlows(authorization_code_grant=True),
+        scopes=[cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
+        callback_urls=["https://<ALB_URL>/oauth2/callback"],
+        logout_urls=["https://<ALB_URL>/"],
+    ),
+    generate_secret=True,
+)
+
+user_pool.add_domain("C360Domain",
+    cognito_domain=cognito.CognitoDomainOptions(domain_prefix="c360-poc")
+)
+```
+
+### 17.6 Updated Architecture Diagram (Phase 2)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                            Internet                                        │
+└─────────────────────────────────┬─────────────────────────────────────────┘
+                                  │ HTTPS
+                                  ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  AWS ALB (internet-facing)                                                │
+│  - SSL termination                                                        │
+│  - Routes to Streamlit                                                    │
+└─────────────────────────────────┬─────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Streamlit on EKS (namespace: c360-app)                                   │
+│  - Chat UI                                                                │
+│  - Cognito OIDC login                                                     │
+│  - JWT token management                                                   │
+└─────────────────┬───────────────────────────────────────┬─────────────────┘
+                  │ Login redirect                        │ API call (JWT)
+                  ▼                                      ▼
+┌─────────────────────────┐          ┌──────────────────────────────────────┐
+│  Amazon Cognito          │          │  Amazon Bedrock AgentCore             │
+│  - User Pool             │          │                                      │
+│  - Hosted UI             │          │  Gateway: JWT validation (Cognito)   │
+│  - Groups (RBAC)         │          │  Runtime: Strands Agent + Claude     │
+│  - Token issuance        │          │  Identity: AtScale credentials       │
+└─────────────────────────┘          └──────────────────┬───────────────────┘
+                                                        │ MCP Protocol
+                                                        ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  AtScale MCP Server (EKS, namespace: atscale)                             │
+│  - atscale_ask / atscale_query / atscale_schema tools                     │
+└──────────────────────────────────────────────────────────────────────────┘
+                                                        │
+                                                        ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  AtScale Semantic Layer (EKS)                                             │
+│  - Customer_360 model                                                     │
+│  - Governance (RLS, column masking)                                       │
+└──────────────────────────────────────────────────────────────────────────┘
+                                                        │ SQL pushdown
+                                                        ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Amazon Redshift Serverless                                               │
+│  - All C360 data (8 tables)                                               │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 17.7 Implementation Tasks
+
+| # | Task | Priority | Dependency |
+|---|------|----------|------------|
+| 1 | Create Cognito User Pool + App Client (CDK) | High | None |
+| 2 | Build Streamlit Docker image, push to ECR | High | None |
+| 3 | Deploy Streamlit to EKS with ALB Ingress | High | Task 2 |
+| 4 | Add Cognito OIDC login to Streamlit | High | Tasks 1, 3 |
+| 5 | Configure AtScale MCP Server on EKS | High | AtScale deployed |
+| 6 | Deploy Strands Agent to AgentCore Runtime | High | Task 5 |
+| 7 | Register MCP Server in AgentCore Gateway | High | Tasks 5, 6 |
+| 8 | Configure AgentCore Gateway JWT validation (Cognito) | High | Tasks 1, 7 |
+| 9 | Update Streamlit to call AgentCore Gateway | High | Tasks 4, 8 |
+| 10 | Test end-to-end authenticated flow | High | All above |
+| 11 | Configure Cognito user groups for RBAC | Medium | Task 1 |
+| 12 | Map Cognito groups to AtScale roles | Medium | Task 11 |
+
+### 17.8 Acceptance Criteria (Phase 2)
+
+- [ ] Streamlit accessible via ALB URL (HTTPS)
+- [ ] User must authenticate via Cognito before accessing chat
+- [ ] Agent runs in AgentCore Runtime (not local process)
+- [ ] Agent queries AtScale via MCP Server (not direct PostgreSQL)
+- [ ] JWT validated at AgentCore Gateway
+- [ ] All 13 sample queries (Q1-Q13) work through the full authenticated flow
+- [ ] User identity visible in AtScale query audit logs
+- [ ] Unauthorized users cannot access the chat or query data
