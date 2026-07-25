@@ -1,0 +1,14 @@
+unique_name: ds_credit_card
+object_type: dataset
+label: Credit Card
+connection_id: redshift_c360
+table: credit_card
+columns:
+  - name: id
+    data_type: string
+  - name: cid
+    data_type: long
+  - name: card_num
+    data_type: string
+  - name: card_type
+    data_type: string

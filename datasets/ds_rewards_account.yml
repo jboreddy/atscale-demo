@@ -1,0 +1,14 @@
+unique_name: ds_rewards_account
+object_type: dataset
+label: Rewards Account
+connection_id: redshift_c360
+table: rewards_account
+columns:
+  - name: id
+    data_type: string
+  - name: cid
+    data_type: long
+  - name: account_id
+    data_type: string
+  - name: create_date
+    data_type: date

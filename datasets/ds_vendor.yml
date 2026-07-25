@@ -1,0 +1,14 @@
+unique_name: ds_vendor
+object_type: dataset
+label: Vendor
+connection_id: redshift_c360
+table: vendor
+columns:
+  - name: id
+    data_type: long
+  - name: vendor_name
+    data_type: string
+  - name: industry
+    data_type: string
+  - name: homepage
+    data_type: string

@@ -1,0 +1,20 @@
+unique_name: ds_address
+object_type: dataset
+label: Address
+connection_id: redshift_c360
+table: address
+columns:
+  - name: id
+    data_type: string
+  - name: street_number
+    data_type: string
+  - name: street_name
+    data_type: string
+  - name: street_suffix
+    data_type: string
+  - name: state
+    data_type: string
+  - name: zip
+    data_type: string
+  - name: city
+    data_type: string

@@ -1,0 +1,12 @@
+unique_name: Total Revenue
+object_type: metric
+label: Total Revenue
+description: Total sales revenue (price x quantity)
+calculation_method: sum
+format: "$#,##0.00"
+dataset: ds_purchase
+column: price
+modifiers:
+  - name: quantity
+    column: quantity
+    operator: multiply

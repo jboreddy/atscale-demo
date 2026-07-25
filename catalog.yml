@@ -1,0 +1,5 @@
+unique_name: customer_360_catalog
+object_type: catalog
+label: Customer 360
+description: Customer 360 semantic model for AI-powered analytics. Enables natural language queries across customer profiles, addresses, products, and purchases co-located in Amazon Redshift.
+version: 1.6

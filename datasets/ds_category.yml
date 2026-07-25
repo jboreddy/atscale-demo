@@ -1,0 +1,14 @@
+unique_name: ds_category
+object_type: dataset
+label: Category
+connection_id: redshift_c360
+table: category
+columns:
+  - name: id
+    data_type: long
+  - name: dept_name
+    data_type: string
+  - name: parent
+    data_type: long
+  - name: description
+    data_type: string

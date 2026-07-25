@@ -1,0 +1,6 @@
+unique_name: redshift_c360
+label: Redshift C360
+object_type: connection
+as_connection: redshift_c360
+database: analytics_db
+schema: public

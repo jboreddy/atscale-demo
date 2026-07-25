@@ -1,0 +1,18 @@
+unique_name: ds_product
+object_type: dataset
+label: Product
+connection_id: redshift_c360
+table: product
+columns:
+  - name: id
+    data_type: long
+  - name: name
+    data_type: string
+  - name: brand
+    data_type: string
+  - name: price
+    data_type: double
+  - name: dept
+    data_type: long
+  - name: description
+    data_type: string

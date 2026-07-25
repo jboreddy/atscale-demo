@@ -1,0 +1,24 @@
+unique_name: ds_purchase
+object_type: dataset
+label: Purchase
+connection_id: redshift_c360
+table: purchase
+columns:
+  - name: id
+    data_type: string
+  - name: pid
+    data_type: long
+  - name: purchase_date
+    data_type: date
+  - name: purchase_time
+    data_type: string
+  - name: quantity
+    data_type: long
+  - name: price
+    data_type: double
+  - name: cid
+    data_type: long
+  - name: card
+    data_type: string
+  - name: reward_account
+    data_type: string

@@ -1,0 +1,41 @@
+unique_name: Address Dimension
+object_type: dimension
+label: Address Dimension
+type: standard
+hierarchies:
+  - unique_name: Address Hierarchy
+    label: Address Hierarchy
+    levels:
+      - unique_name: State
+        level_attributes:
+          - unique_name: State
+            label: State
+            dataset: ds_address
+            name_column: state
+            key_columns:
+              - state
+      - unique_name: City
+        level_attributes:
+          - unique_name: City
+            label: City
+            dataset: ds_address
+            name_column: city
+            key_columns:
+              - city
+              - state
+      - unique_name: Address
+        level_attributes:
+          - unique_name: Address
+            label: Address
+            is_unique_key: true
+            dataset: ds_address
+            name_column: street_name
+            key_columns:
+              - id
+        secondary_attributes:
+          - unique_name: d_zip
+            label: Zip Code
+            dataset: ds_address
+            name_column: zip
+            key_columns:
+              - zip

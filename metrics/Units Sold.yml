@@ -1,0 +1,8 @@
+unique_name: Units Sold
+object_type: metric
+label: Units Sold
+description: Total quantity of items sold
+calculation_method: sum
+format: "#,##0"
+dataset: ds_purchase
+column: quantity

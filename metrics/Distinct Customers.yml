@@ -1,0 +1,8 @@
+unique_name: Distinct Customers
+object_type: metric
+label: Distinct Customers
+description: Count of unique customers
+calculation_method: count_distinct
+format: "#,##0"
+dataset: ds_purchase
+column: cid

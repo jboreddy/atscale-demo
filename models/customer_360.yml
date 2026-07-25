@@ -1,0 +1,46 @@
+unique_name: customer_360
+object_type: model
+label: Customer 360
+description: Unified Customer 360 semantic model. All data co-located in Amazon Redshift. Enables natural language queries across customer profiles, addresses, products, and purchases.
+visible: true
+
+relationships:
+  - unique_name: purchase_customer
+    from:
+      dataset: ds_purchase
+      join_columns:
+        - cid
+    to:
+      dimension: Customer Dimension
+      level: Customer Name
+
+  - unique_name: purchase_product
+    from:
+      dataset: ds_purchase
+      join_columns:
+        - pid
+    to:
+      dimension: Product Dimension
+      level: Product Name
+
+  - unique_name: purchase_vendor
+    from:
+      dataset: ds_purchase
+      join_columns:
+        - pid
+    to:
+      dimension: Vendor Dimension
+      level: Vendor Name
+
+dimensions:
+  - Address Dimension
+
+metrics:
+  - unique_name: Total Revenue
+    folder: Sales Metrics
+  - unique_name: Order Count
+    folder: Sales Metrics
+  - unique_name: Units Sold
+    folder: Sales Metrics
+  - unique_name: Distinct Customers
+    folder: Customer Metrics
