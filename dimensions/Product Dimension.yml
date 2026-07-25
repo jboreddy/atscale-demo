@@ -23,7 +23,6 @@ hierarchies:
             name_column: name
             key_columns:
               - id
-        secondary_attributes:
           - unique_name: d_brand
             label: Brand
             dataset: ds_product
@@ -36,15 +35,7 @@ hierarchies:
             name_column: price
             key_columns:
               - price
-relationships:
-  - unique_name: Product_Category
-    from:
-      hierarchy: Product Hierarchy
-      level: Product Name
+    filter:
       dataset: ds_product
-      join_columns:
-        - dept
-    to:
-      dimension: Product Dimension
-      level: Category
-    type: embedded
+      column: dept
+      joins_to_level: Category

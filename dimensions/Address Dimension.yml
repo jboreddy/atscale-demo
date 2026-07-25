@@ -32,7 +32,6 @@ hierarchies:
             name_column: street_name
             key_columns:
               - id
-        secondary_attributes:
           - unique_name: d_zip
             label: Zip Code
             dataset: ds_address

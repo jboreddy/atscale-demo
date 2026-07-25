@@ -15,7 +15,6 @@ hierarchies:
             name_column: full_name
             key_columns:
               - cid
-        secondary_attributes:
           - unique_name: d_first_name
             label: First Name
             dataset: ds_customer

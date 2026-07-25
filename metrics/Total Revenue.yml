@@ -5,8 +5,4 @@ description: Total sales revenue (price x quantity)
 calculation_method: sum
 format: "$#,##0.00"
 dataset: ds_purchase
-column: price
-modifiers:
-  - name: quantity
-    column: quantity
-    operator: multiply
+column: line_total
