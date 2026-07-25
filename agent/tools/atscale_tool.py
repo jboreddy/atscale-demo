@@ -19,43 +19,51 @@ def _get_client() -> AtScaleClient:
 def query_atscale(sql: str) -> dict:
     """
     Execute a SQL query against the AtScale Customer 360 semantic layer.
-    
-    AtScale federates queries across Aurora PostgreSQL (customer data) and
-    Amazon Redshift (product/purchase data) and joins them on shared keys.
-    
-    Available Dimensions:
-    - dim_customer: customer_id, first_name, last_name, full_name, email, phone
-    - dim_address: city, state, zip_code, street (joined to customer via cid)
-    - dim_product: product_id, product_name, brand, product_price
-    - dim_category: dept_name, parent_category
-    - dim_vendor: vendor_name, industry
-    
-    Available Measures (from fact_purchase):
-    - total_revenue: SUM(price * quantity) — total sales in dollars
-    - order_count: COUNT of purchase transactions
-    - units_sold: SUM(quantity) — total items sold
-    - avg_order_value: total_revenue / order_count
-    - customer_lifetime_value: total revenue per customer
-    - distinct_customers: COUNT(DISTINCT cid)
-    
-    Calculated Attributes:
-    - big_spender: 'Yes' if customer lifetime value > $10,000
-    - large_order: 'Yes' if single order > $500
-    - spend_tier: 'Platinum' (>$50K), 'Gold' (>$10K), 'Standard'
-    
+
+    The semantic layer provides a unified view of customer, product, and purchase
+    data. All queries use the "customer_360" model.
+
+    Available Dimensions (use these as column names in SELECT/WHERE/GROUP BY):
+    - "Customer Name" — full name of the customer
+    - "First Name" — customer first name
+    - "Last Name" — customer last name
+    - "Email" — customer email address
+    - "Phone" — customer phone number
+    - "State" — customer state (from address)
+    - "City" — customer city (from address)
+    - "Zip Code" — postal code
+    - "Product Name" — name of the product
+    - "Brand" — product brand
+    - "List Price" — product list price
+    - "Category" — product category/department
+    - "Vendor Name" — vendor/supplier name
+    - "Industry" — vendor industry
+
+    Available Metrics (use these as column names, they auto-aggregate):
+    - "Total Revenue" — SUM(price * quantity) in dollars
+    - "Order Count" — count of purchase transactions
+    - "Units Sold" — SUM(quantity)
+    - "Distinct Customers" — COUNT DISTINCT customers
+
+    Important SQL rules:
+    - Table name: "customer_360" (in FROM clause)
+    - Column names MUST be in double quotes (they contain spaces)
+    - Metrics auto-aggregate when grouped by dimensions
+    - Use ORDER BY and LIMIT for top-N queries
+
     Example queries:
-    - "SELECT full_name, state, total_revenue FROM customer_360 GROUP BY full_name, state ORDER BY total_revenue DESC LIMIT 10"
-    - "SELECT state, COUNT(*) as customer_count FROM customer_360 WHERE state = 'WI' GROUP BY state"
-    - "SELECT product_name, units_sold FROM customer_360 GROUP BY product_name ORDER BY units_sold DESC LIMIT 10"
-    
+    - SELECT "Customer Name", "State", "Total Revenue" FROM "customer_360" ORDER BY "Total Revenue" DESC LIMIT 10
+    - SELECT "State", "Total Revenue", "Distinct Customers" FROM "customer_360" ORDER BY "Total Revenue" DESC LIMIT 5
+    - SELECT "Product Name", "Units Sold" FROM "customer_360" ORDER BY "Units Sold" DESC LIMIT 10
+    - SELECT "Category", "Total Revenue" FROM "customer_360" ORDER BY "Total Revenue" DESC
+
     Args:
-        sql: SQL query using the semantic model's dimensions and measures.
-             Use the table name 'customer_360' as the FROM clause.
-             
+        sql: SQL query using the semantic model column names listed above.
+
     Returns:
         Dictionary with:
         - columns: list of column names
-        - rows: list of row data
+        - rows: list of row dictionaries
         - row_count: number of rows returned
         - sql_used: the SQL that was executed
         - success: boolean indicating if query succeeded
@@ -69,50 +77,38 @@ def query_atscale(sql: str) -> dict:
 def get_semantic_model_info() -> dict:
     """
     Get information about the Customer 360 semantic model structure.
-    
-    Returns available dimensions, measures, and calculated attributes
-    that can be used in SQL queries.
-    
-    Returns:
-        Dictionary with model metadata including available fields.
+
+    Returns available dimensions, metrics, and example queries.
     """
     return {
         "model_name": "customer_360",
-        "description": "Unified Customer 360 model spanning Aurora (customers) and Redshift (products/purchases)",
+        "catalog": "customer_360_catalog_main",
+        "description": "Unified Customer 360 model with all data in Amazon Redshift",
         "dimensions": {
-            "dim_customer": {
-                "source": "Aurora PostgreSQL",
-                "attributes": ["customer_id", "first_name", "last_name", "full_name", "email", "phone"],
-            },
-            "dim_address": {
-                "source": "Aurora PostgreSQL",
-                "attributes": ["city", "state", "zip_code", "street"],
-                "joined_via": "customer_id",
-            },
-            "dim_product": {
-                "source": "Redshift",
-                "attributes": ["product_id", "product_name", "brand", "product_price"],
-            },
-            "dim_category": {
-                "source": "Redshift",
-                "attributes": ["dept_name", "parent_category"],
-            },
-            "dim_vendor": {
-                "source": "Redshift",
-                "attributes": ["vendor_name", "industry"],
-            },
+            "Customer Name": "Full name of the customer",
+            "First Name": "Customer first name",
+            "Last Name": "Customer last name",
+            "Email": "Customer email address",
+            "Phone": "Customer phone number",
+            "State": "Customer state (geographic)",
+            "City": "Customer city",
+            "Zip Code": "Postal code",
+            "Product Name": "Name of product purchased",
+            "Brand": "Product brand",
+            "List Price": "Product list price",
+            "Category": "Product category/department",
+            "Vendor Name": "Vendor/supplier name",
+            "Industry": "Vendor industry",
         },
-        "measures": {
-            "total_revenue": "SUM(price * quantity) - total sales dollars",
-            "order_count": "COUNT of transactions",
-            "units_sold": "SUM(quantity)",
-            "avg_order_value": "total_revenue / order_count",
-            "customer_lifetime_value": "total spend per customer",
-            "distinct_customers": "COUNT(DISTINCT customers)",
+        "metrics": {
+            "Total Revenue": "SUM(price * quantity) — total sales dollars",
+            "Order Count": "Count of purchase transactions",
+            "Units Sold": "SUM(quantity) — total items sold",
+            "Distinct Customers": "Count of unique customers",
         },
-        "calculated_attributes": {
-            "big_spender": "Yes/No based on CLV > $10,000",
-            "large_order": "Yes/No based on order > $500",
-            "spend_tier": "Platinum/Gold/Standard",
-        },
+        "example_queries": [
+            'SELECT "Customer Name", "State", "Total Revenue" FROM "customer_360" ORDER BY "Total Revenue" DESC LIMIT 10',
+            'SELECT "State", "Total Revenue", "Distinct Customers" FROM "customer_360" ORDER BY "Total Revenue" DESC',
+            'SELECT "Product Name", "Units Sold", "Total Revenue" FROM "customer_360" ORDER BY "Units Sold" DESC LIMIT 10',
+        ],
     }

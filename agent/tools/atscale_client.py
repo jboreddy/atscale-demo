@@ -1,49 +1,43 @@
-"""AtScale REST API client for querying the semantic layer."""
+"""AtScale client — connects via PostgreSQL wire protocol (port 15432)."""
 
 import os
-import requests
+import psycopg2
 from typing import Optional
 
 
 class AtScaleClient:
-    """Client for querying AtScale semantic layer via REST API."""
+    """Client for querying AtScale semantic layer via PostgreSQL protocol."""
 
     def __init__(
         self,
-        endpoint: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        database: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        model_name: str = "customer_360",
     ):
-        self.endpoint = endpoint or os.environ.get(
-            "ATSCALE_URL", "http://localhost:10500"
+        self.host = host or os.environ.get(
+            "ATSCALE_HOST",
+            "k8s-atscale-atscalei-ba4358e717-dc18b0c39e9fcefe.elb.us-east-1.amazonaws.com",
         )
-        self.username = username or os.environ.get("ATSCALE_USERNAME", "admin")
-        self.password = password or os.environ.get("ATSCALE_PASSWORD", "admin")
-        self.model_name = model_name
-        self._token: Optional[str] = None
-
-    def _authenticate(self) -> str:
-        """Get authentication token."""
-        if self._token:
-            return self._token
-
-        response = requests.post(
-            f"{self.endpoint}/api/1.0/auth/login",
-            json={"username": self.username, "password": self.password},
-            timeout=10,
+        self.port = port or int(os.environ.get("ATSCALE_PORT", "15432"))
+        self.database = database or os.environ.get(
+            "ATSCALE_DATABASE", "customer_360_catalog_main"
         )
-        response.raise_for_status()
-        self._token = response.json().get("token")
-        return self._token
+        self.username = username or os.environ.get("ATSCALE_USERNAME", "atscale-kc-admin")
+        self.password = password or os.environ.get("ATSCALE_PASSWORD", "")
 
-    def _headers(self) -> dict:
-        """Get authenticated headers."""
-        token = self._authenticate()
-        return {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
+    def _get_connection(self):
+        """Create a new database connection."""
+        return psycopg2.connect(
+            host=self.host,
+            port=self.port,
+            dbname=self.database,
+            user=self.username,
+            password=self.password,
+            sslmode="require",
+            connect_timeout=30,
+        )
 
     def execute_query(self, sql: str) -> dict:
         """
@@ -53,47 +47,52 @@ class AtScaleClient:
             sql: SQL query using semantic model dimensions and measures.
 
         Returns:
-            dict with keys: columns, rows, row_count, sql_used
+            dict with keys: columns, rows, row_count, sql_used, success
         """
         try:
-            response = requests.post(
-                f"{self.endpoint}/api/1.0/query",
-                headers=self._headers(),
-                json={
-                    "query": sql,
-                    "catalog": self.model_name,
-                    "schema": "public",
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            result = response.json()
+            conn = self._get_connection()
+            cur = conn.cursor()
+            cur.execute(sql)
+
+            # Get column names
+            columns = [desc[0] for desc in cur.description] if cur.description else []
+
+            # Get rows
+            rows = cur.fetchall()
+
+            # Convert to list of dicts for easier consumption
+            results = []
+            for row in rows:
+                results.append(dict(zip(columns, row)))
+
+            cur.close()
+            conn.close()
 
             return {
-                "columns": result.get("columns", []),
-                "rows": result.get("rows", []),
-                "row_count": len(result.get("rows", [])),
+                "columns": columns,
+                "rows": results,
+                "row_count": len(results),
                 "sql_used": sql,
                 "success": True,
             }
 
-        except requests.Timeout:
+        except psycopg2.OperationalError as e:
             return {
                 "columns": [],
                 "rows": [],
                 "row_count": 0,
                 "sql_used": sql,
                 "success": False,
-                "error": "Query timed out after 30 seconds",
+                "error": f"Connection error: {str(e)}",
             }
-        except requests.HTTPError as e:
+        except psycopg2.Error as e:
             return {
                 "columns": [],
                 "rows": [],
                 "row_count": 0,
                 "sql_used": sql,
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text}",
+                "error": f"Query error: {str(e)}",
             }
         except Exception as e:
             return {
@@ -105,26 +104,14 @@ class AtScaleClient:
                 "error": str(e),
             }
 
-    def get_model_metadata(self) -> dict:
-        """Get metadata about the semantic model (dimensions, measures)."""
-        try:
-            response = requests.get(
-                f"{self.endpoint}/api/1.0/catalogs/{self.model_name}",
-                headers=self._headers(),
-                timeout=10,
-            )
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            return {"error": str(e)}
-
     def health_check(self) -> bool:
         """Check if AtScale is reachable and healthy."""
         try:
-            response = requests.get(
-                f"{self.endpoint}/health",
-                timeout=5,
-            )
-            return response.status_code == 200
+            conn = self._get_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+            conn.close()
+            return True
         except Exception:
             return False

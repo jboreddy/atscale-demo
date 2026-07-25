@@ -3,6 +3,10 @@
 import sys
 import os
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 # Add agent module to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "agent"))
 
