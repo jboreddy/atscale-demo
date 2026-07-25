@@ -2,7 +2,7 @@ unique_name: Order Count
 object_type: metric
 label: Order Count
 description: Number of purchase transactions
-calculation_method: count
+calculation_method: count non-null
 format: "#,##0"
 dataset: ds_purchase
 column: id
